@@ -171,3 +171,12 @@ def get_transaction_history(
 def get_model_metrics():
     """Returns model performance metrics and benchmark comparison results."""
     return RUNTIME_STATE.get("metrics", {})
+
+@router.delete("/history", tags=["Monitoring"])
+def clear_transaction_history(db: Session = Depends(get_db_session)):
+    """Clears transaction audit logs for demo/testing purposes."""
+    deleted_count = db.query(TransactionAudit).delete()
+    db.commit()
+    logger.info(f"Cleared {deleted_count} transaction audit records.")
+    return {"status": "success", "deleted_count": deleted_count, "message": f"Cleared {deleted_count} audit records."}
+

@@ -308,8 +308,51 @@ with tab_sim:
 # -------------------------------------------------------------
 # TAB 2: MONITORING & AUDITS
 # -------------------------------------------------------------
+# TAB 2: TRANSACTION MONITORING & AUDIT TRAIL
+# -------------------------------------------------------------
 with tab_monitor:
     st.subheader("Transaction Monitoring & Audit Trail")
+
+    # ------------------------------------------------------------------
+    # Stale record advisory and clear-history control
+    # ------------------------------------------------------------------
+    with st.expander("⚠️ Audit History Management", expanded=False):
+        st.markdown(
+            """
+**About Stale Records in the Audit Log**
+
+The audit log persists every prediction ever made through the `/predict` endpoint.
+Records from **before the preset bug-fix** (prior to `2026-09-03 16:17`):
+- May show `TXN-PRESET-ELECTRONICS` with `fraud_probability = 0.022 / risk_score = 2.2 / Low Risk`.
+- **Root cause**: In those sessions, the FastAPI server was loading an earlier in-memory model state during a mid-session code change, returning incorrect probabilities. The features stored in `features_json` were already correct (V14 = –2.0503, V10 = –1.1372), confirming the bug was in the model artifact loaded at that moment, not in the feature extraction.
+- Records **after** `2026-09-03 16:17:05` (IDs ≥ 33) reflect the correct verified predictions:
+  - Coffee → 0.11% probability / Low Risk
+  - Electronics → 46.16% probability / Medium Risk
+  - Fraud → 96.96% probability / Critical Risk
+
+**To clear demo/stale records**, use the button below. This calls `DELETE /history` on the API and removes all audit entries for a clean demo state.
+            """,
+            unsafe_allow_html=False
+        )
+        with st.form("clear_history_form"):
+            st.warning("This will permanently delete ALL audit records from the database. Use only for demo resets.")
+            confirm_clear = st.checkbox("I understand — permanently delete all audit records")
+            clear_btn = st.form_submit_button("🗑️ Clear Demo Audit History", type="secondary")
+            if clear_btn:
+                if confirm_clear:
+                    try:
+                        resp = requests.delete(f"{API_BASE_URL}/history", timeout=5)
+                        if resp.status_code == 200:
+                            result = resp.json()
+                            st.success(f"✅ Cleared {result['deleted_count']} audit records. Refresh the page to see the empty log.")
+                            fetch_history.clear()
+                        else:
+                            st.error(f"API returned {resp.status_code}: {resp.text}")
+                    except Exception as e:
+                        st.error(f"Could not reach API: {e}")
+                else:
+                    st.info("Please check the confirmation box first.")
+
     history_data = fetch_history()
 
     if history_data:
@@ -365,14 +408,16 @@ with tab_monitor:
             )
             st.plotly_chart(fig_scatter, use_container_width=True)
 
-        # Interactive Table
+        # Interactive Table with timestamp
         st.markdown("### Recent Transaction Logs")
+        display_cols = [c for c in ["transaction_id", "timestamp", "amount", "fraud_probability", "risk_score", "risk_level", "decision", "latency_ms"] if c in df_hist.columns]
         st.dataframe(
-            df_hist[["transaction_id", "amount", "fraud_probability", "risk_score", "risk_level", "decision", "latency_ms"]],
+            df_hist[display_cols],
             use_container_width=True
         )
     else:
         st.info("No transaction history recorded yet. Run the simulation or seed the database using `python scripts/seed_db.py`.")
+
 
 # -------------------------------------------------------------
 # TAB 3: MODEL BENCHMARK & EVALUATION
