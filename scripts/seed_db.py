@@ -31,10 +31,10 @@ SAMPLE_TRANSACTIONS = [
     {"amount": 2300.00, "prob": 0.82, "score": 82.0, "tier": "High Risk", "is_fraud": True, "decision": "Flag for Manual Fraud Analyst Review", "factor": "V4 (Increases Risk)"},
     {"amount": 1890.00, "prob": 0.88, "score": 88.0, "tier": "High Risk", "is_fraud": True, "decision": "Flag for Manual Fraud Analyst Review", "factor": "V10 (Increases Risk)"},
 
-    # Critical risk transactions (Immediate Freeze / Decline)
-    {"amount": 4890.00, "prob": 0.96, "score": 96.0, "tier": "Critical Risk", "is_fraud": True, "decision": "Decline / Immediate Account Freeze", "factor": "V12 (Increases Risk)"},
-    {"amount": 3200.00, "prob": 0.94, "score": 94.0, "tier": "Critical Risk", "is_fraud": True, "decision": "Decline / Immediate Account Freeze", "factor": "V17 (Increases Risk)"},
-    {"amount": 9500.00, "prob": 0.99, "score": 99.0, "tier": "Critical Risk", "is_fraud": True, "decision": "Decline / Immediate Account Freeze", "factor": "V14 (Increases Risk)"}
+    # Critical risk transactions (Hold for Manual Review)
+    {"amount": 4890.00, "prob": 0.96, "score": 96.0, "tier": "Critical Risk", "is_fraud": True, "decision": "Critical Risk – Hold for Manual Review", "factor": "V12 (Increases Risk)"},
+    {"amount": 3200.00, "prob": 0.94, "score": 94.0, "tier": "Critical Risk", "is_fraud": True, "decision": "Critical Risk – Hold for Manual Review", "factor": "V17 (Increases Risk)"},
+    {"amount": 9500.00, "prob": 0.99, "score": 99.0, "tier": "Critical Risk", "is_fraud": True, "decision": "Critical Risk – Hold for Manual Review", "factor": "V14 (Increases Risk)"}
 ]
 
 def seed_database():

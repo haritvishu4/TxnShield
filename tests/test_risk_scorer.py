@@ -32,4 +32,4 @@ def test_evaluate_transaction_tiers():
     # Critical risk
     res_crit = scorer.evaluate_transaction(0.95)
     assert res_crit["risk_level"] == "Critical Risk"
-    assert "Freeze" in res_crit["decision"]
+    assert "Hold" in res_crit["decision"]

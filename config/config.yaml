@@ -69,7 +69,7 @@ risk_engine:
       color: "orange"
     CRITICAL:
       label: "Critical Risk"
-      action: "Decline / Immediate Account Freeze"
+      action: "Critical Risk – Hold for Manual Review"
       color: "red"
 
 api:

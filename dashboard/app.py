@@ -137,7 +137,7 @@ with st.sidebar:
     st.markdown("🟢 **0 - 29**: Low Risk (Auto-Approve)")
     st.markdown("🟡 **30 - 69**: Medium Risk (2FA Step-up)")
     st.markdown("🟠 **70 - 89**: High Risk (Analyst Review)")
-    st.markdown("🔴 **90 - 100**: Critical Risk (Freeze)")
+    st.markdown("🔴 **90 - 100**: Critical Risk – Hold for Manual Review")
 
 # Main Navigation Tabs
 tab_sim, tab_monitor, tab_benchmark, tab_arch = st.tabs([
@@ -378,7 +378,8 @@ with tab_monitor:
 # TAB 3: MODEL BENCHMARK & EVALUATION
 # -------------------------------------------------------------
 with tab_benchmark:
-    st.subheader("Model Evaluation & Imbalanced Benchmark")
+    st.subheader("Model Evaluation & Dataset Provenance Benchmark")
+    st.write("Full transparency across evaluation stages: Candidate models were benchmarked on the **Validation Set (15% split)** during development, whereas generalization was evaluated on the independent **Held-Out Test Set (15% split)**.")
     metrics_summary = fetch_metrics()
 
     if metrics_summary and "validation_benchmark" in metrics_summary:
@@ -387,43 +388,54 @@ with tab_benchmark:
             {"Model": k, **v} for k, v in val_bm.items()
         ])
 
-        st.markdown(f"**Selected Best Production Model:** `{metrics_summary.get('best_model_name')}`")
-        st.markdown(f"**Optimal Decision Threshold:** `τ* = {metrics_summary.get('optimal_threshold')}` (Optimized on Validation Set)")
+        st.markdown("---")
+        st.markdown("### 📊 1. Candidate Model Benchmark (Validation Set — 42,559 transactions)")
+        st.caption("Evaluated on the 15% stratified Validation Set at standard baseline threshold (τ = 0.50). This stage guided the selection of the production model architecture.")
 
-        # Benchmark Comparison Table
         st.dataframe(
             df_bench[["Model", "pr_auc", "roc_auc", "precision", "recall", "f1_score", "true_positives", "false_positives", "false_negatives"]],
             use_container_width=True
         )
 
-        # Comparison Chart
         fig_comp = px.bar(
             df_bench,
             x="Model",
             y=["pr_auc", "roc_auc", "f1_score", "recall"],
             barmode="group",
-            title="Model Metric Benchmark (Handling Severe Imbalance)"
+            title="Validation Set Metric Benchmark (PR-AUC, ROC-AUC, F1, Recall)"
         )
         st.plotly_chart(fig_comp, use_container_width=True)
 
-        # Test Set Performance comparison
-        st.markdown("### Test Set Generalization (Default vs Optimal Threshold)")
+        st.markdown("---")
+        st.markdown("### 🎯 2. Generalization & Threshold Tuning (Held-Out Test Set — 42,559 transactions)")
+        
+        st.info(
+            f"**Validation-Tuned Decision Threshold Objective (τ* = {metrics_summary.get('optimal_threshold', 0.4159)}):**\n\n"
+            "The threshold `τ* = 0.4159` was **calibrated on the Validation Set** to maximize validation F1 (0.8235) and prioritize fraud recall over missed detections.\n\n"
+            "**Unseen Held-Out Test Set Evaluation:**\n"
+            "- **Default Threshold (τ = 0.50)**: Yields slightly higher Precision (0.8209 vs 0.7887) and F1 (0.7971 vs 0.7887), but misses 16 fraudulent transactions (Recall = 77.46%).\n"
+            "- **Validation-Tuned Threshold (τ* = 0.4159)**: Boosts Recall to **78.87%** and reduces False Negatives from 16 to 15 (catching an additional true fraud case), at the cost of 3 additional false alerts across 42,559 transactions.\n\n"
+            "*In financial risk engineering, reducing missed fraud (False Negatives) is prioritized because the direct loss from an undetected attack significantly outweighs the cost of step-up verification.*"
+        )
+
         t_col1, t_col2 = st.columns(2)
         with t_col1:
             def_m = metrics_summary.get("test_metrics_default_threshold", {})
-            st.markdown("#### Default Threshold (τ = 0.50)")
+            st.markdown("#### Default Threshold (τ = 0.50 on Held-Out Test Set)")
             st.write(f"- **F1 Score:** {def_m.get('f1_score', 'N/A')}")
-            st.write(f"- **Recall:** {def_m.get('recall', 'N/A')}")
+            st.write(f"- **Recall:** {def_m.get('recall', 'N/A')} ({def_m.get('true_positives', 'N/A')} / {def_m.get('true_positives', 0) + def_m.get('false_negatives', 0)} frauds caught)")
             st.write(f"- **Precision:** {def_m.get('precision', 'N/A')}")
             st.write(f"- **False Negatives (Missed Fraud):** {def_m.get('false_negatives', 'N/A')}")
+            st.write(f"- **False Positives (False Alarms):** {def_m.get('false_positives', 'N/A')}")
 
         with t_col2:
             opt_m = metrics_summary.get("test_metrics_optimal_threshold", {})
-            st.markdown(f"#### Optimal Threshold (τ* = {metrics_summary.get('optimal_threshold')})")
+            st.markdown(f"#### Validation-Tuned Threshold (τ* = {metrics_summary.get('optimal_threshold')} on Held-Out Test Set)")
             st.write(f"- **F1 Score:** {opt_m.get('f1_score', 'N/A')}")
-            st.write(f"- **Recall:** {opt_m.get('recall', 'N/A')}")
+            st.write(f"- **Recall:** {opt_m.get('recall', 'N/A')} ({opt_m.get('true_positives', 'N/A')} / {opt_m.get('true_positives', 0) + opt_m.get('false_negatives', 0)} frauds caught)")
             st.write(f"- **Precision:** {opt_m.get('precision', 'N/A')}")
             st.write(f"- **False Negatives (Missed Fraud):** {opt_m.get('false_negatives', 'N/A')}")
+            st.write(f"- **False Positives (False Alarms):** {opt_m.get('false_positives', 'N/A')}")
 
     else:
         st.info("Model metrics not loaded yet. Run `python scripts/run_pipeline.py` to train and evaluate candidate models.")

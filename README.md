@@ -49,12 +49,12 @@ This project delivers a complete software system solving each of these challenge
 
 - **Multi-Model Benchmark**: Trains and compares Logistic Regression (baseline), Random Forest, and XGBoost with dynamic class weighting.
 - **Strict Leakage Prevention**: Preprocessing scalers are fit strictly on training splits before transforming validation and test folds.
-- **Threshold Optimization**: Replaces the arbitrary 0.5 decision threshold with a validation-tuned threshold ($\tau^*$) maximizing the $F_1$ / Precision-Recall trade-off.
+- **Threshold Optimization**: Replaces the arbitrary 0.5 decision threshold with a validation-tuned threshold ($\tau^* = 0.4159$) calibrated on validation PR curves to maximize $F_1$ and prioritize fraud recall over missed detections.
 - **Dynamic Risk Intelligence Engine**: Converts raw probabilities into a 0–100 Risk Score categorized into 4 actionable business tiers:
   - 🟢 **Low Risk (0–29)**: Auto-approve.
   - 🟡 **Medium Risk (30–69)**: Step-up authentication (2FA / OTP).
   - 🟠 **High Risk (70–89)**: Route to manual fraud analyst review queue.
-  - 🔴 **Critical Risk (90–100)**: Immediate transaction decline & account freeze.
+  - 🔴 **Critical Risk (90–100)**: Critical Risk – Hold for manual review / Escalate to fraud analyst.
 - **Explainable AI (SHAP)**: Provides local feature attribution for every transaction, identifying exact factors pushing the score up or down.
 - **High-Performance FastAPI**: RESTful endpoints with Pydantic v2 input validation, swagger documentation (`/docs`), and single/batch inference.
 - **Transaction Audit Database**: SQLite + SQLAlchemy persistence tracking every evaluated transaction, risk level, decision, and latency.
@@ -143,19 +143,40 @@ We train three distinct architectures with class balancing:
 
 ## 📈 Evaluation Metrics & Model Comparison
 
-Because accuracy is misleading on imbalanced datasets, we evaluate models using:
-- **Precision-Recall AUC (PR-AUC / Average Precision)**: The primary gold standard metric under heavy class imbalance.
-- **ROC-AUC**: Evaluates discrimination ability across all thresholds.
-- **Recall**: Measures coverage of actual fraud detected ($\frac{TP}{TP + FN}$).
-- **Precision**: Measures purity of fraud flags ($\frac{TP}{TP + FP}$).
-- **$F_1$-Score**: Harmonic mean of Precision and Recall.
+Because accuracy is misleading on imbalanced datasets (~0.17% positive rate), models are evaluated using **PR-AUC (Average Precision)**, **ROC-AUC**, **Recall**, **Precision**, and **$F_1$-Score**.
+
+### 1. Candidate Benchmark (Validation Set — 42,559 transactions)
+Evaluated on the 15% stratified Validation partition at the default baseline threshold ($\tau = 0.50$) to compare algorithms and select the production architecture:
+
+| Model | PR-AUC (Avg Precision) | ROC-AUC | Precision | Recall | $F_1$-Score | False Positives | False Negatives |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **Logistic Regression (Baseline)** | 0.6909 | 0.9718 | 0.0510 | **0.8873** | 0.0965 | 1,172 | **8** |
+| **Random Forest (Selected)** | **0.8280** | **0.9757** | **0.8571** | 0.7606 | **0.8060** | **9** | 17 |
+| **XGBoost Classifier** | 0.7950 | 0.9791 | 0.5490 | 0.7887 | 0.6474 | 46 | 15 |
+
+*Key takeaway:* Random Forest generated only **9 false alarms** out of 42,559 validation transactions while delivering the highest PR-AUC (0.8280).
 
 ---
 
-## 🎯 Decision Threshold Optimization
+## 🎯 Decision Threshold Optimization & Generalization
 
-Standard classifiers default to $\tau = 0.5$. In fraud detection, this default threshold is typically suboptimal.
-Our `ThresholdOptimizer` systematically sweeps candidate thresholds $\tau \in [0.01, 0.99]$ on the **Validation Set** to find the threshold $\tau^*$ that maximizes the business objective ($F_1$ or $F_\beta$ score).
+### Optimization Objective
+In credit card fraud operations, a missed \$2,000 fraud attack (False Negative) costs vastly more than an OTP prompt sent to a customer (False Positive). Therefore, the threshold optimizer sweeps candidate thresholds $\tau \in [0.01, 0.99]$ on the **Validation Set** to calibrate a **Validation-Tuned Decision Threshold** ($\tau^* = 0.4159$) prioritizing Recall over missed fraud.
+
+### 2. Generalization Performance (Unseen Held-Out Test Set — 42,559 transactions)
+When evaluating the selected Random Forest on the unseen held-out test split, comparing the baseline threshold against the validation-tuned cutoff:
+
+| Metric | Default Threshold ($\tau = 0.50$) | Validation-Tuned Threshold ($\tau^* = 0.4159$) | Operational Impact |
+| :--- | :---: | :---: | :--- |
+| **Precision** | **0.8209** | 0.7887 | Slight drop due to 3 additional alerts across 42,559 txns |
+| **Recall** | 0.7746 | **0.7887** | **+1.41% increase** in fraud detection coverage |
+| **$F_1$-Score** | **0.7971** | 0.7887 | Balanced harmonic mean across trade-off |
+| **Frauds Caught (TP)** | 55 / 71 | **56 / 71** | **1 additional fraud attack intercepted** |
+| **Missed Fraud (FN)** | 16 | **15** | **Reduced costly false negatives** |
+| **False Alarms (FP)** | **12** | 15 | Manageable volume (15 out of 42,488 legit txns) |
+
+> [!NOTE]
+> We explicitly define $\tau^* = 0.4159$ as a *validation-tuned threshold prioritizing fraud recall* rather than claiming global optimality across all transaction regimes. In production, this threshold is continuously monitored and tuned as business loss matrices evolve.
 
 ---
 
@@ -167,10 +188,10 @@ $$\text{Risk Score} = \text{round}(P(\text{fraud}) \times 100, 2)$$
 
 | Risk Tier | Score Range | Action | Description |
 | :--- | :---: | :--- | :--- |
-| **Low Risk** | 0 – 29 | **Approve Transaction** | Instant approval, seamless customer experience. |
-| **Medium Risk** | 30 – 69 | **Step-Up Authentication** | Prompt user with SMS OTP / biometric confirmation. |
+| **Low Risk** | 0 – 29 | **Approve Transaction** | Instant approval, frictionless customer checkout. |
+| **Medium Risk** | 30 – 69 | **Step-Up Authentication** | Prompt cardholder with SMS OTP / biometric verification. |
 | **High Risk** | 70 – 89 | **Analyst Review** | Route transaction to fraud ops queue for manual inspection. |
-| **Critical Risk** | 90 – 100 | **Decline & Freeze** | Block card authorization immediately and alert cardholder. |
+| **Critical Risk** | 90 – 100 | **Critical Risk – Hold for Manual Review** | Escalate to fraud analyst for urgent review before clearing. |
 
 ---
 
@@ -314,8 +335,8 @@ docker-compose up --build
 | **What is the trade-off between Precision and Recall in fraud?** | High Recall ensures we catch as many stolen cards as possible (minimizing direct monetary fraud loss). High Precision ensures we don't bombard legitimate users with false declines (reducing customer friction and churn). |
 | **How did you prevent data leakage?** | Scalers were fitted strictly on the 70% training split. Validation and test splits were transformed using the frozen training parameters. Deduplication was performed before splitting. |
 | **Why did you use Logistic Regression as a baseline?** | It establishes a fast, calibrated benchmark and verifies that complex non-linear models (Random Forest, XGBoost) yield genuine marginal performance gains. |
-| **How did you optimize the decision threshold?** | By sweeping candidate thresholds across validation PR curves to maximize $F_1$ score, yielding an optimal threshold $\tau^*$ rather than relying on the arbitrary 0.5 default. |
-| **How does your risk score work?** | Calibrated model probabilities are scaled to 0–100 and mapped into 4 actionable business tiers (Low, Medium, High, Critical) with explicit actions (Approve, 2FA, Manual Review, Freeze). |
+| **How did you tune the decision threshold?** | Swept candidate thresholds on the **Validation Set** to find $\tau^* = 0.4159$, prioritizing fraud recall and reducing missed fraud (False Negatives from 16 to 15 on held-out test data) while balancing $F_1$. |
+| **How does your risk score work?** | Calibrated model probabilities are scaled to 0–100 and mapped into 4 actionable business tiers (Low, Medium, High, Critical) with explicit actions (Approve, 2FA, Manual Review, Hold for Review). |
 | **How does SHAP work in this system?** | Using TreeSHAP, it computes Shapley values quantifying the marginal contribution of each feature to the final prediction log-odds. |
 
 ---
