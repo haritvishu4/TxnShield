@@ -34,7 +34,58 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Helper function to check API health
+# Genuine test dataset vectors for realistic presets (held-out test split)
+DATASET_PRESETS = {
+    "coffee": {
+        "name": "☕ Coffee Shop (Legitimate - Test Index 173117)",
+        "desc": "Genuine legitimate retail transaction ($6.42) from held-out test split (Class 0).",
+        "features": {
+            "Time": 121634.0, "Amount": 6.42, "V1": 2.1615, "V2": -0.0827, "V3": -2.4382, "V4": 0.2243,
+            "V5": 0.7392, "V6": -0.9843, "V7": 0.5755, "V8": -0.3377, "V9": 0.8001, "V10": 0.0597,
+            "V11": -2.1355, "V12": -1.2218, "V13": -2.3872, "V14": 1.0712, "V15": 0.1743, "V16": -0.5358,
+            "V17": -0.2903, "V18": -0.0305, "V19": 0.4980, "V20": -0.3929, "V21": 0.0434, "V22": 0.2575,
+            "V23": -0.1740, "V24": -1.0771, "V25": 0.6042, "V26": 0.0073, "V27": -0.0668, "V28": -0.0902
+        }
+    },
+    "electronics": {
+        "name": "💻 Electronics Store (Elevated Risk - Test Index 201083)",
+        "desc": "Genuine elevated risk transaction ($150.66) from test split with borderline feature pattern.",
+        "features": {
+            "Time": 134047.0, "Amount": 150.66, "V1": 1.7608, "V2": -0.1369, "V3": -2.4043, "V4": 0.8479,
+            "V5": 0.5088, "V6": -0.9360, "V7": 0.4497, "V8": -0.2641, "V9": 0.8600, "V10": -1.1372,
+            "V11": -0.4757, "V12": -0.0367, "V13": -0.3540, "V14": -2.0503, "V15": -0.0989, "V16": 0.1424,
+            "V17": 1.6158, "V18": 0.5625, "V19": -0.0849, "V20": 0.1224, "V21": -0.1051, "V22": -0.3704,
+            "V23": -0.0368, "V24": 0.4872, "V25": 0.1601, "V26": -0.3375, "V27": -0.0154, "V28": 0.0240
+        }
+    },
+    "fraud": {
+        "name": "🚨 High-Risk Attack (Confirmed Fraud - Test Index 211895)",
+        "desc": "Genuine fraudulent credit card transaction ($727.91) from held-out test split (Class 1).",
+        "features": {
+            "Time": 138942.0, "Amount": 727.91, "V1": -2.3563, "V2": 1.7464, "V3": -6.3746, "V4": 1.7722,
+            "V5": -3.4393, "V6": 1.4578, "V7": -0.3626, "V8": 1.4438, "V9": -1.9274, "V10": -6.5647,
+            "V11": 2.4508, "V12": -5.6941, "V13": -1.1555, "V14": -7.1322, "V15": -0.0596, "V16": -4.5966,
+            "V17": -5.5221, "V18": -3.5291, "V19": -0.6634, "V20": 0.1948, "V21": 0.8579, "V22": 0.6212,
+            "V23": 0.9648, "V24": -0.6194, "V25": -1.7326, "V26": 0.1084, "V27": 1.1308, "V28": 0.4157
+        }
+    }
+}
+
+# Initialize session state for all 30 model features
+if "txn_features" not in st.session_state:
+    st.session_state["txn_features"] = DATASET_PRESETS["coffee"]["features"].copy()
+    st.session_state["active_preset_name"] = DATASET_PRESETS["coffee"]["name"]
+    st.session_state["txn_id"] = f"TXN-{np.random.randint(10000, 99999)}"
+    st.session_state["auto_trigger"] = True
+
+def select_preset(preset_key):
+    preset = DATASET_PRESETS[preset_key]
+    st.session_state["txn_features"] = preset["features"].copy()
+    st.session_state["active_preset_name"] = preset["name"]
+    st.session_state["txn_id"] = f"TXN-PRESET-{preset_key.upper()}"
+    st.session_state["auto_trigger"] = True
+
+# Helper functions to check API health and fetch logs
 @st.cache_data(ttl=5)
 def check_api_health():
     try:
@@ -101,95 +152,103 @@ tab_sim, tab_monitor, tab_benchmark, tab_arch = st.tabs([
 # -------------------------------------------------------------
 with tab_sim:
     st.subheader("Simulate & Score Financial Transaction")
-    st.write("Submit transaction features to obtain instant fraud probability, calibrated risk score, and SHAP explanations.")
+    st.write("Select a genuine dataset preset or manually adjust features to test real-time risk scoring.")
 
-    # Preset transaction buttons
+    # Preset transaction buttons with explicit callbacks
+    st.markdown("##### ⚡ Quick-Load Tested Dataset Presets:")
     col_p1, col_p2, col_p3 = st.columns(3)
-    preset_choice = None
     with col_p1:
-        if st.button("☕ Preset: Coffee Shop ($4.50)", use_container_width=True):
-            preset_choice = "legit"
+        st.button("☕ Preset: Coffee Shop ($6.42)", on_click=select_preset, args=("coffee",), use_container_width=True)
+        st.caption("Genuine Legitimate (Test Split Index 173117)")
     with col_p2:
-        if st.button("💻 Preset: Electronics Store ($1,299.00)", use_container_width=True):
-            preset_choice = "medium"
+        st.button("💻 Preset: Electronics Store ($150.66)", on_click=select_preset, args=("electronics",), use_container_width=True)
+        st.caption("Genuine Elevated Risk (Test Split Index 201083)")
     with col_p3:
-        if st.button("🚨 Preset: High-Risk Attack Pattern ($3,450.00)", use_container_width=True):
-            preset_choice = "fraud"
+        st.button("🚨 Preset: High-Risk Attack ($727.91)", on_click=select_preset, args=("fraud",), use_container_width=True)
+        st.caption("Genuine Confirmed Fraud (Test Split Index 211895)")
 
-    # Default preset values
-    default_amount = 4.50
-    default_time = 1200.0
-    v_defaults = {f"V{i}": 0.0 for i in range(1, 29)}
+    st.info(f"Active Selected Profile: **{st.session_state.get('active_preset_name', 'Custom')}**")
 
-    if preset_choice == "legit":
-        default_amount = 4.50
-        default_time = 45000.0
-        v_defaults["V14"] = 0.5
-        v_defaults["V10"] = 0.2
-        v_defaults["V4"] = -0.3
-    elif preset_choice == "medium":
-        default_amount = 1299.00
-        default_time = 72000.0
-        v_defaults["V14"] = -1.5
-        v_defaults["V4"] = 1.8
-        v_defaults["V11"] = 1.2
-    elif preset_choice == "fraud":
-        default_amount = 3450.00
-        default_time = 86400.0
-        v_defaults["V14"] = -5.2  # Key predictive components
-        v_defaults["V10"] = -3.8
-        v_defaults["V12"] = -4.5
-        v_defaults["V17"] = -4.0
-        v_defaults["V4"] = 4.2
-
+    # Transaction Input Form
     with st.form(key="transaction_form"):
         col_f1, col_f2, col_f3 = st.columns(3)
-        with col_f1:
-            txn_id = st.text_input("Transaction ID", value=f"TXN-{np.random.randint(10000, 99999)}")
-            amount = st.number_input("Transaction Amount ($)", min_value=0.01, value=float(default_amount), step=1.0)
-        with col_f2:
-            time_sec = st.number_input("Time (Seconds from reference)", value=float(default_time), step=60.0)
-            v4 = st.slider("V4 (Transaction Velocity)", min_value=-5.0, max_value=8.0, value=float(v_defaults["V4"]), step=0.1)
-        with col_f3:
-            v10 = st.slider("V10 (Behavioral Vector)", min_value=-8.0, max_value=5.0, value=float(v_defaults["V10"]), step=0.1)
-            v14 = st.slider("V14 (Anomalous Signature)", min_value=-10.0, max_value=5.0, value=float(v_defaults["V14"]), step=0.1)
+        current_feat = st.session_state["txn_features"]
 
-        with st.expander("Advanced PCA Features (V1 - V28)"):
+        with col_f1:
+            txn_id = st.text_input("Transaction ID", value=st.session_state.get("txn_id", "TXN-DEMO-001"))
+            amount = st.number_input("Transaction Amount ($)", min_value=0.01, value=float(current_feat["Amount"]), step=1.0, format="%.2f")
+        with col_f2:
+            time_sec = st.number_input("Time (Seconds elapsed)", value=float(current_feat["Time"]), step=60.0, format="%.1f")
+            v4 = st.number_input("V4 (Anonymized PCA Feature)", value=float(current_feat["V4"]), step=0.1, format="%.4f")
+        with col_f3:
+            v10 = st.number_input("V10 (Anonymized PCA Feature)", value=float(current_feat["V10"]), step=0.1, format="%.4f")
+            v14 = st.number_input("V14 (Anonymized PCA Feature)", value=float(current_feat["V14"]), step=0.1, format="%.4f")
+
+        with st.expander("Complete Model Feature Vector (V1 - V28 Anonymized PCA Components)", expanded=False):
+            st.caption("All 28 anonymized PCA features are populated with genuine values from the dataset.")
             exp_cols = st.columns(4)
-            advanced_v = {}
+            full_v_inputs = {}
             for i in range(1, 29):
+                key = f"V{i}"
+                if key in ["V4", "V10", "V14"]:
+                    continue
                 col_idx = (i - 1) % 4
                 with exp_cols[col_idx]:
-                    if f"V{i}" in ["V4", "V10", "V14"]:
-                        continue
-                    advanced_v[f"V{i}"] = st.number_input(f"V{i}", value=float(v_defaults.get(f"V{i}", 0.0)), step=0.1, format="%.2f")
+                    val = float(current_feat.get(key, 0.0))
+                    full_v_inputs[key] = st.number_input(
+                        f"{key} (Anonymized PCA Feature)",
+                        value=val,
+                        step=0.1,
+                        format="%.4f",
+                        key=f"input_{key}"
+                    )
 
-        submit_btn = st.form_submit_button("🛡️ Run Fraud Detection & Risk Scoring", type="primary", use_container_width=True)
+        manual_submit = st.form_submit_button("🛡️ Run Fraud Detection & Risk Scoring", type="primary", use_container_width=True)
 
-    if submit_btn:
+    # Determine if execution is triggered (either manual submit or preset button click)
+    should_run = manual_submit or st.session_state.get("auto_trigger", False)
+    if st.session_state.get("auto_trigger", False):
+        st.session_state["auto_trigger"] = False
+
+    if should_run:
+        # Construct complete 30-feature model payload
         payload = {
             "transaction_id": txn_id,
-            "Amount": float(amount),
             "Time": float(time_sec),
+            "Amount": float(amount),
             "V4": float(v4),
             "V10": float(v10),
             "V14": float(v14),
-            **advanced_v
+            **full_v_inputs
         }
+        # Update session state to keep in sync
+        for k in current_feat:
+            if k in payload:
+                st.session_state["txn_features"][k] = payload[k]
 
-        with st.spinner("Analyzing risk with trained machine learning ensemble..."):
+        with st.spinner("Analyzing risk via trained machine learning ensemble..."):
             try:
                 resp = requests.post(f"{API_BASE_URL}/predict", json=payload, timeout=5)
+                
+                # --- TEMPORARY DEBUG OUTPUT SECTION ---
+                with st.expander("🛠️ Debug: Exact Payload Sent to FastAPI (/predict)", expanded=True):
+                    st.write(f"**Endpoint:** `POST {API_BASE_URL}/predict`")
+                    st.write(f"**Preset Source:** `{st.session_state.get('active_preset_name', 'Custom')}`")
+                    st.write(f"**HTTP Response Code:** `{resp.status_code}`")
+                    st.markdown("**Complete 30-Feature JSON Payload:**")
+                    st.json(payload)
+                # --------------------------------------
+
                 if resp.status_code == 200:
                     res = resp.json()
                     st.success("Analysis Complete!")
 
-                    # Result Dashboard
+                    # Result Summary Cards
                     r_col1, r_col2, r_col3, r_col4 = st.columns(4)
                     with r_col1:
-                        st.metric("Fraud Probability", f"{res['fraud_probability']*100:.1f}%")
+                        st.metric("Fraud Probability", f"{res['fraud_probability']*100:.2f}%")
                     with r_col2:
-                        st.metric("Risk Score", f"{res['risk_score']:.1f} / 100")
+                        st.metric("Risk Score", f"{res['risk_score']:.2f} / 100")
                     with r_col3:
                         badge_class = f"badge-{res['risk_level'].split()[0].lower()}"
                         st.markdown(f"**Risk Level:** <span class='{badge_class}'>{res['risk_level']}</span>", unsafe_allow_html=True)
@@ -224,7 +283,7 @@ with tab_sim:
 
                     # Explainability: SHAP Contributions
                     st.subheader("🔍 Prediction Explainability (SHAP Risk Factors)")
-                    st.write("Below are the exact feature contributions pushing the transaction score up (risk-elevating) or down (safety-assuring):")
+                    st.write("Feature attributions quantifying marginal impact on the prediction (positive = elevates risk, negative = assures safety):")
 
                     if res.get("top_risk_drivers"):
                         df_shap = pd.DataFrame(res["top_risk_drivers"])
@@ -244,7 +303,7 @@ with tab_sim:
                 else:
                     st.error(f"API Error ({resp.status_code}): {resp.text}")
             except Exception as e:
-                st.error(f"Failed to connect to API backend: {e}")
+                st.error(f"Failed to connect to API backend: {e}. Ensure FastAPI is running on {API_BASE_URL}")
 
 # -------------------------------------------------------------
 # TAB 2: MONITORING & AUDITS
