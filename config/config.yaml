@@ -1,0 +1,84 @@
+project:
+  name: "Real-Time Fraud Detection and Risk Intelligence System"
+  version: "1.0.0"
+
+paths:
+  raw_data_dir: "data/raw"
+  raw_data_file: "data/raw/creditcard.csv"
+  processed_data_dir: "data/processed"
+  models_dir: "models"
+  best_model_path: "models/fraud_detector.joblib"
+  preprocessor_path: "models/preprocessor.joblib"
+  metrics_path: "models/metrics.json"
+  database_url: "sqlite:///./fraud_audit.db"
+
+data:
+  dataset_url: "https://storage.googleapis.com/download.tensorflow.org/data/creditcard.csv"
+  target_column: "Class"
+  test_size: 0.15
+  val_size: 0.15
+  random_state: 42
+  time_feature: "Time"
+  amount_feature: "Amount"
+
+training:
+  imbalance_method: "class_weight" # Options: class_weight, smote, none
+  baseline_model: "logistic_regression"
+  candidate_models:
+    - "logistic_regression"
+    - "random_forest"
+    - "xgboost"
+  logistic_regression:
+    C: 0.1
+    max_iter: 1000
+    class_weight: "balanced"
+    solver: "lbfgs"
+  random_forest:
+    n_estimators: 100
+    max_depth: 12
+    class_weight: "balanced"
+    random_state: 42
+    n_jobs: -1
+  xgboost:
+    n_estimators: 120
+    max_depth: 5
+    learning_rate: 0.08
+    scale_pos_weight: 100
+    random_state: 42
+    eval_metric: "aucpr"
+    n_jobs: -1
+
+risk_engine:
+  # Score range 0 - 100
+  thresholds:
+    low_max: 30.0
+    medium_max: 70.0
+    high_max: 90.0
+  tiers:
+    LOW:
+      label: "Low Risk"
+      action: "Approve Transaction"
+      color: "green"
+    MEDIUM:
+      label: "Medium Risk"
+      action: "Step-Up Authentication (2FA/OTP)"
+      color: "yellow"
+    HIGH:
+      label: "High Risk"
+      action: "Flag for Manual Fraud Analyst Review"
+      color: "orange"
+    CRITICAL:
+      label: "Critical Risk"
+      action: "Decline / Immediate Account Freeze"
+      color: "red"
+
+api:
+  host: "0.0.0.0"
+  port: 8000
+  title: "Real-Time Fraud Detection & Risk Intelligence API"
+  description: "Production API for fraud inference, dynamic risk scoring, SHAP explainability, and transaction audit logging"
+  version: "1.0.0"
+
+dashboard:
+  host: "0.0.0.0"
+  port: 8501
