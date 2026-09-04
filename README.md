@@ -37,7 +37,7 @@ The project demonstrates a complete ML engineering workflow, including:
 ## 🖥️ Dashboard Preview
 
 ### Overview
-![TxnShield Overview](docs/screenshots/overview.png)
+![TxnShield Overview](docs/screenshots/txnshield-overview.png)
 
 ### Transaction Analysis
 ![TxnShield Transaction Analysis](docs/screenshots/transaction-analysis.png)
@@ -48,6 +48,7 @@ The project demonstrates a complete ML engineering workflow, including:
 ### Monitoring & Audits
 ![TxnShield Monitoring and Audits](docs/screenshots/monitoring-audits.png)
 
+---
 ---
 
 ## ✨ Key Features
@@ -690,3 +691,4 @@ https://github.com/haritvishu4/TxnShield
 Machine Learning · FastAPI · Streamlit · SHAP · SQLite · Docker
 
 [def]: docs/screenshots/overview.png
+[def2]: docs/screenshots/overview.png
