@@ -688,3 +688,5 @@ https://github.com/haritvishu4/TxnShield
 **Transaction Fraud Intelligence**
 
 Machine Learning · FastAPI · Streamlit · SHAP · SQLite · Docker
+
+[def]: docs/screenshots/overview.png
