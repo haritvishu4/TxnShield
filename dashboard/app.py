@@ -1,9 +1,16 @@
 """Local risk-operations dashboard; the backend and model contracts are unchanged."""
 
 import os
+import sys
 import time
 import uuid
 from pathlib import Path
+
+# Make the project root importable on Streamlit Community Cloud
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 import requests
 # pyrefly: ignore [missing-import]
