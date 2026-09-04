@@ -1,3 +1,4 @@
+import os
 import yaml
 from pathlib import Path
 from typing import Any, Dict
@@ -14,4 +15,7 @@ def load_config(config_path: str = "config/config.yaml") -> Dict[str, Any]:
             raise FileNotFoundError(f"Configuration file not found at: {config_path}")
     with open(path, "r", encoding="utf-8") as f:
         config = yaml.safe_load(f)
+    database_url = os.getenv("FRAUD_DATABASE_URL")
+    if database_url:
+        config["paths"]["database_url"] = database_url
     return config

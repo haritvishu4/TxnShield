@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   fraud-api:
     build: .
@@ -10,7 +8,9 @@ services:
     volumes:
       - ./data:/app/data
       - ./models:/app/models
-      - ./fraud_audit.db:/app/fraud_audit.db
+      - fraud-audit-data:/app/runtime
+    environment:
+      - FRAUD_DATABASE_URL=sqlite:////app/runtime/fraud_audit.db
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
@@ -27,5 +27,9 @@ services:
     environment:
       - API_BASE_URL=http://fraud-api:8000
     depends_on:
-      - fraud-api
+      fraud-api:
+        condition: service_healthy
     restart: unless-stopped
+
+volumes:
+  fraud-audit-data:

@@ -3,14 +3,16 @@ from fastapi.testclient import TestClient
 from api.app import app
 from api.routes import RUNTIME_STATE
 from src.data.preprocessor import DataPreprocessor
+from src.database.connection import get_session_direct, init_db
+from src.database.models import TransactionAudit
 from src.models.trainer import ModelTrainer
 from src.risk_engine.scorer import RiskScorer
 import numpy as np
 import pandas as pd
 
 @pytest.fixture(scope="module", autouse=True)
-def setup_runtime_state():
-    """Sets up lightweight fitted mock model & preprocessor for API testing."""
+def setup_runtime_state(tmp_path_factory):
+    """Sets up a lightweight model and an isolated audit database."""
     np.random.seed(42)
     n = 100
     df = pd.DataFrame(np.random.normal(0, 1, (n, 30)), columns=[f"V{i}" for i in range(1, 29)] + ["Amount", "Time"])
@@ -25,9 +27,12 @@ def setup_runtime_state():
 
     RUNTIME_STATE["model"] = model
     RUNTIME_STATE["preprocessor"] = preprocessor
+    RUNTIME_STATE["explainer"] = None
     RUNTIME_STATE["risk_scorer"] = RiskScorer()
     RUNTIME_STATE["optimal_threshold"] = 0.5
     RUNTIME_STATE["version"] = "1.0.0"
+    test_db_path = tmp_path_factory.mktemp("audit") / "test_fraud_audit.db"
+    init_db(f"sqlite:///{test_db_path}")
 
 client = TestClient(app)
 
@@ -57,6 +62,19 @@ def test_predict_endpoint_valid():
     assert "decision" in data
     assert 0.0 <= data["risk_score"] <= 100.0
 
+    db = get_session_direct()
+    try:
+        audit = db.query(TransactionAudit).filter_by(transaction_id="TXN-TEST-123").one()
+        assert audit.fraud_probability == data["fraud_probability"]
+        assert audit.risk_score == data["risk_score"]
+        assert audit.risk_level == data["risk_level"]
+        assert audit.is_fraud == data["is_fraud"]
+        assert audit.decision == data["decision"]
+        assert audit.model_version == data["model_version"]
+        assert audit.latency_ms == data["latency_ms"]
+    finally:
+        db.close()
+
 def test_predict_endpoint_invalid_amount():
     payload = {
         "transaction_id": "TXN-INVALID",
@@ -82,3 +100,10 @@ def test_history_endpoint():
     resp = client.get("/history?limit=10")
     assert resp.status_code == 200
     assert isinstance(resp.json(), list)
+
+def test_clear_history_endpoint():
+    history_before = client.get("/history").json()
+    resp = client.delete("/history")
+    assert resp.status_code == 200
+    assert resp.json()["deleted_count"] == len(history_before)
+    assert client.get("/history").json() == []

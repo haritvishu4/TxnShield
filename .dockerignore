@@ -1,0 +1,16 @@
+.git
+.github
+.venv
+__MACOSX
+**/__pycache__
+**/*.py[cod]
+.pytest_cache
+.coverage
+htmlcov
+*.db
+*.sqlite3
+*.egg-info
+data/raw/*.csv
+data/processed
+notebooks/.ipynb_checkpoints
+.DS_Store

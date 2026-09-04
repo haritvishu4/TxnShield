@@ -1,8 +1,13 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, Text
 from sqlalchemy.orm import declarative_base
 
 Base = declarative_base()
+
+
+def utc_now_naive():
+    """Return naive UTC for compatibility with the existing SQLite column."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 class TransactionAudit(Base):
     """Stores every transaction evaluated by the fraud detection system for auditing and monitoring."""
@@ -10,7 +15,7 @@ class TransactionAudit(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     transaction_id = Column(String(64), index=True, nullable=False)
-    timestamp = Column(DateTime, default=datetime.utcnow, nullable=False)
+    timestamp = Column(DateTime, default=utc_now_naive, nullable=False)
     amount = Column(Float, nullable=False)
     fraud_probability = Column(Float, nullable=False)
     risk_score = Column(Float, nullable=False)

@@ -6,7 +6,7 @@
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg)](https://www.docker.com)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-An end-to-end, production-grade Machine Learning Engineering system designed to detect potentially fraudulent financial transactions, compute calibrated risk scores (0–100), classify multi-tiered business risk levels, explain decisions via SHAP, serve real-time predictions with sub-20ms latency through a FastAPI REST service, persist transaction audits in SQLite, and visualize telemetry on an interactive Streamlit dashboard.
+An end-to-end machine-learning engineering reference project for detecting potentially fraudulent financial transactions, converting model probabilities into risk scores (0–100), assigning actionable risk tiers, explaining decisions with SHAP, serving predictions through FastAPI, persisting audit records in SQLite, and visualizing telemetry in Streamlit.
 
 ---
 
@@ -49,18 +49,18 @@ This project delivers a complete software system solving each of these challenge
 
 - **Multi-Model Benchmark**: Trains and compares Logistic Regression (baseline), Random Forest, and XGBoost with dynamic class weighting.
 - **Strict Leakage Prevention**: Preprocessing scalers are fit strictly on training splits before transforming validation and test folds.
-- **Threshold Optimization**: Replaces the arbitrary 0.5 decision threshold with a validation-tuned threshold ($\tau^* = 0.4159$) calibrated on validation PR curves to maximize $F_1$ and prioritize fraud recall over missed detections.
+- **Threshold Optimization**: Replaces the arbitrary 0.5 classification threshold with a validation-tuned threshold ($\tau^* = 0.4159$) selected to maximize validation $F_1$.
 - **Dynamic Risk Intelligence Engine**: Converts raw probabilities into a 0–100 Risk Score categorized into 4 actionable business tiers:
   - 🟢 **Low Risk (0–29)**: Auto-approve.
   - 🟡 **Medium Risk (30–69)**: Step-up authentication (2FA / OTP).
   - 🟠 **High Risk (70–89)**: Route to manual fraud analyst review queue.
   - 🔴 **Critical Risk (90–100)**: Critical Risk – Hold for manual review / Escalate to fraud analyst.
-- **Explainable AI (SHAP)**: Provides local feature attribution for every transaction, identifying exact factors pushing the score up or down.
-- **High-Performance FastAPI**: RESTful endpoints with Pydantic v2 input validation, swagger documentation (`/docs`), and single/batch inference.
+- **Explainable AI (SHAP)**: Provides local feature attribution for every transaction, identifying factors pushing the score up or down.
+- **FastAPI Service**: RESTful endpoints with Pydantic v2 input validation, OpenAPI documentation (`/docs`), request latency measurement, and single/batch inference.
 - **Transaction Audit Database**: SQLite + SQLAlchemy persistence tracking every evaluated transaction, risk level, decision, and latency.
-- **Interactive Streamlit Dashboard**: Live simulation sandbox with presets, risk gauge visualizations, SHAP waterfall plots, and real-time audit logs.
-- **Automated Pytest Suite**: 13 unit and integration tests covering data integrity, preprocessing, risk calculation, and API endpoints.
-- **Dockerized Deployment**: Production Dockerfile and docker-compose orchestration.
+- **Interactive Streamlit Dashboard**: Live simulation sandbox with presets, risk gauge visualizations, SHAP contribution charts, and audit logs.
+- **Automated Pytest Suite**: 33 unit and integration tests covering preprocessing, models, risk calculation, all six dashboard pages, preset switching, API endpoints, and real-model audit persistence.
+- **Dockerized Deployment**: Dockerfile and Compose orchestration for local/demo deployment.
 
 ---
 
@@ -135,7 +135,7 @@ Data leakage is a fatal flaw in fraud models. We prevent it via:
 
 We train three distinct architectures with class balancing:
 
-1. **Logistic Regression (Baseline)**: Fast, linear, calibrated with `class_weight='balanced'`.
+1. **Logistic Regression (Baseline)**: Fast, linear, and trained with `class_weight='balanced'`.
 2. **Random Forest**: Ensemble of 100 decision trees with balanced bootstrapping.
 3. **XGBoost Classifier**: Extreme gradient boosting with dynamic `scale_pos_weight = N_legit / N_fraud` and `eval_metric='aucpr'`.
 
@@ -161,7 +161,7 @@ Evaluated on the 15% stratified Validation partition at the default baseline thr
 ## 🎯 Decision Threshold Optimization & Generalization
 
 ### Optimization Objective
-In credit card fraud operations, a missed \$2,000 fraud attack (False Negative) costs vastly more than an OTP prompt sent to a customer (False Positive). Therefore, the threshold optimizer sweeps candidate thresholds $\tau \in [0.01, 0.99]$ on the **Validation Set** to calibrate a **Validation-Tuned Decision Threshold** ($\tau^* = 0.4159$) prioritizing Recall over missed fraud.
+The threshold optimizer sweeps candidate thresholds $\tau \in [0.01, 0.99]$ on the **Validation Set** and selects the threshold with the highest validation $F_1$. The selected threshold ($\tau^* = 0.4159$) also catches one additional fraud case on the held-out test set versus $\tau = 0.50$, at the cost of three additional false positives.
 
 ### 2. Generalization Performance (Unseen Held-Out Test Set — 42,559 transactions)
 When evaluating the selected Random Forest on the unseen held-out test split, comparing the baseline threshold against the validation-tuned cutoff:
@@ -176,7 +176,7 @@ When evaluating the selected Random Forest on the unseen held-out test split, co
 | **False Alarms (FP)** | **12** | 15 | Manageable volume (15 out of 42,488 legit txns) |
 
 > [!NOTE]
-> We explicitly define $\tau^* = 0.4159$ as a *validation-tuned threshold prioritizing fraud recall* rather than claiming global optimality across all transaction regimes. In production, this threshold is continuously monitored and tuned as business loss matrices evolve.
+> We explicitly define $\tau^* = 0.4159$ as a *validation-tuned threshold* rather than claiming global optimality across all transaction regimes. A production deployment should monitor and retune it as data and business costs change.
 
 ---
 
@@ -193,13 +193,15 @@ $$\text{Risk Score} = \text{round}(P(\text{fraud}) \times 100, 2)$$
 | **High Risk** | 70 – 89 | **Analyst Review** | Route transaction to fraud ops queue for manual inspection. |
 | **Critical Risk** | 90 – 100 | **Critical Risk – Hold for Manual Review** | Escalate to fraud analyst for urgent review before clearing. |
 
+The binary `is_fraud` classification and the business risk tier are intentionally separate: `is_fraud` uses the validation-tuned threshold of 41.59%, while tier actions use the fixed 30/70/90 boundaries above. A 46.16% Electronics preset is therefore classified as potential fraud and assigned **Medium Risk / Step-Up Authentication**.
+
 ---
 
 ## 🔍 Explainable AI with SHAP
 
-Using `shap.TreeExplainer`, each transaction prediction is decomposed into additive feature attributions:
+Using `shap.TreeExplainer`, each transaction prediction is decomposed into additive feature attributions in the explainer's output space:
 
-$$\text{Log-Odds}(\text{Fraud}) = \phi_0 + \sum_{i=1}^{M} \phi_i$$
+$$f(x) = \phi_0 + \sum_{i=1}^{M} \phi_i$$
 
 Where $\phi_i$ is the SHAP value for feature $i$.
 - **Positive $\phi_i$**: Factors increasing suspicion (e.g., abnormally negative $V_{14}$ combined with sudden high transaction velocity $V_4$).
@@ -209,14 +211,15 @@ Where $\phi_i$ is the SHAP value for feature $i$.
 
 ## 🚀 FastAPI REST Backend
 
-The API provides production-grade endpoints documented via OpenAPI:
+The API provides the following endpoints, documented via OpenAPI:
 
 ### Endpoints
 - `GET /health`: Health status, model family, threshold, version.
 - `POST /predict`: Real-time transaction scoring with SHAP explanations and audit logging.
-- `POST /batch-predict`: Vectorized multi-transaction evaluation.
+- `POST /batch-predict`: Multi-transaction evaluation.
 - `GET /history`: Query logged audit transactions with filtering by risk tier.
 - `GET /metrics`: Model evaluation summary and comparison benchmarks.
+- `DELETE /history`: Clear the local demo audit history after explicit confirmation in the dashboard.
 
 ### Sample Request
 ```bash
@@ -236,20 +239,20 @@ curl -X POST "http://127.0.0.1:8000/predict" \
 ```json
 {
   "transaction_id": "TXN-89412",
-  "is_fraud": true,
-  "prediction": "Potential Fraud",
-  "fraud_probability": 0.8841,
-  "risk_score": 88.41,
-  "risk_level": "High Risk",
-  "decision": "Flag for Manual Fraud Analyst Review",
-  "badge_color": "orange",
-  "latency_ms": 7.42,
+  "is_fraud": false,
+  "prediction": "Legitimate Transaction",
+  "fraud_probability": 0.2513,
+  "risk_score": 25.13,
+  "risk_level": "Low Risk",
+  "decision": "Approve Transaction",
+  "badge_color": "green",
+  "latency_ms": 12.34,
   "top_risk_drivers": [
     {
-      "feature": "V14",
-      "shap_value": 0.3542,
-      "feature_value": -4.2,
-      "impact": "Increases Risk"
+      "feature": "V3",
+      "shap_value": -0.1514,
+      "feature_value": 0.0,
+      "impact": "Decreases Risk"
     }
   ],
   "model_version": "1.0.0"
@@ -260,11 +263,28 @@ curl -X POST "http://127.0.0.1:8000/predict" \
 
 ## 💻 Streamlit Monitoring Dashboard
 
-The web dashboard provides four functional areas:
-1. **Interactive Simulator**: Test hypothetical transactions or quick-load presets (Coffee Shop, High-Value Electronics, Coordinated Attack Pattern).
-2. **Risk Gauge & SHAP Chart**: Visual speedometer and waterfall chart explaining feature drivers.
-3. **Transaction Monitoring**: Real-time table and analytics charts loaded from SQLite.
-4. **Model Performance**: Interactive confusion matrix and PR/ROC comparison curves.
+The dashboard uses a light FinTech visual style with an off-white canvas, white cards, a compact sidebar, blue actions, and risk-state colors. Six views share the same unchanged API:
+
+1. **Overview**: A compact vertical KPI column with navy value badges; a 2×2 grid of assessed-amount bars, recorded risk activity, risk distribution, and model health; recent events and a high/critical review queue. Navy/orange distinguishes unflagged/flagged input amounts; risk-tier colors remain green/amber/orange/red. Amount bars retain repeated transaction IDs as distinct audit events and do not represent settled or approved payment volume.
+2. **Transaction Analysis**: Genuine Coffee Shop, Electronics Store, and High-Risk Attack presets; all 30 editable inputs; a compact assessment and SHAP panel instead of the oversized gauge.
+3. **Monitoring & Audits**: Case-insensitive transaction-ID search, risk-tier/flag filters, charts, UTC timestamps, and the existing explicitly confirmed demo reset.
+4. **Model Performance**: Clearly separated validation benchmarks and held-out test metrics, threshold comparison, and sampled validation sweep.
+5. **Architecture**: The input-to-audit flow, separate training path, and existing API endpoints.
+6. **System Information**: Observed health, model version, threshold, health-request timing, audit availability, dataset context, and security limitations. Unexposed SHAP initialization status is not fabricated.
+
+Audit KPIs and filters operate on the **most recent 500 records**, not all-time database totals. The flagged rate describes model predictions, not confirmed fraud prevalence. Model-health PR-AUC/ROC-AUC cards use the labeled held-out test metrics.
+
+Opening Overview and switching pages do not create predictions. A preset selection or **Analyze transaction** submission sends a request; the result remains visible across navigation and refers to the exact payload in Request inspection. All 30 preset values are synchronized, including expanded PCA inputs. Successful predictions invalidate cached history.
+
+The local theme is configured in `.streamlit/config.toml`. No UI dependency was added. After updating an already-running application, restart only the Streamlit process if imported view changes do not appear on refresh. Keep the API process running.
+
+---
+
+## 🗃️ Database & Audit Trail
+
+Every successful `/predict` request writes the returned probability, score, tier, fraud classification, decision, model version, latency, timestamp, and input feature JSON to SQLite. The automated API test compares the response with the exact stored row field by field. Tests use a temporary database, so running `pytest` does not add demo rows to `fraud_audit.db`.
+
+Timestamps are stored in UTC. The dashboard's **Clear Demo Audit History** control calls `DELETE /history` only after an explicit confirmation; it deletes all rows and is intended for local demonstrations.
 
 ---
 
@@ -310,7 +330,7 @@ Open `http://localhost:8501` to view the dashboard and `http://localhost:8000/do
 
 Run the automated test suite with pytest:
 ```bash
-pytest tests/ -v
+pytest -v
 ```
 
 ---
@@ -319,10 +339,12 @@ pytest tests/ -v
 
 Run the entire multi-container stack (FastAPI + Streamlit) with a single command:
 ```bash
-docker-compose up --build
+docker compose up --build
 ```
 - API: `http://localhost:8000`
 - Dashboard: `http://localhost:8501`
+- Audit data persists in the Compose-managed `fraud-audit-data` volume.
+- The image uses `requirements-runtime.txt`, including XGBoost so artifacts from every supported model family can load. Additional plotting and test tools remain in `requirements.txt`.
 
 ---
 
@@ -334,10 +356,10 @@ docker-compose up --build
 | **Why isn't accuracy sufficient?** | A naive dummy model predicting 0 for every transaction achieves 99.83% accuracy while catching 0% of fraud cases. Precision-Recall AUC (PR-AUC) and Recall are vastly more informative. |
 | **What is the trade-off between Precision and Recall in fraud?** | High Recall ensures we catch as many stolen cards as possible (minimizing direct monetary fraud loss). High Precision ensures we don't bombard legitimate users with false declines (reducing customer friction and churn). |
 | **How did you prevent data leakage?** | Scalers were fitted strictly on the 70% training split. Validation and test splits were transformed using the frozen training parameters. Deduplication was performed before splitting. |
-| **Why did you use Logistic Regression as a baseline?** | It establishes a fast, calibrated benchmark and verifies that complex non-linear models (Random Forest, XGBoost) yield genuine marginal performance gains. |
-| **How did you tune the decision threshold?** | Swept candidate thresholds on the **Validation Set** to find $\tau^* = 0.4159$, prioritizing fraud recall and reducing missed fraud (False Negatives from 16 to 15 on held-out test data) while balancing $F_1$. |
-| **How does your risk score work?** | Calibrated model probabilities are scaled to 0–100 and mapped into 4 actionable business tiers (Low, Medium, High, Critical) with explicit actions (Approve, 2FA, Manual Review, Hold for Review). |
-| **How does SHAP work in this system?** | Using TreeSHAP, it computes Shapley values quantifying the marginal contribution of each feature to the final prediction log-odds. |
+| **Why did you use Logistic Regression as a baseline?** | It establishes a fast linear benchmark and verifies that complex non-linear models (Random Forest, XGBoost) yield genuine marginal performance gains. |
+| **How did you tune the decision threshold?** | Maximized $F_1$ over candidate thresholds on the **Validation Set**, selecting $\tau^* = 0.4159$. On held-out test data this catches one additional fraud, with three additional false positives and slightly lower $F_1$ than the 0.50 baseline. |
+| **How does your risk score work?** | Random Forest class probabilities are scaled to 0–100 and mapped into 4 actionable business tiers (Low, Medium, High, Critical) with explicit actions (Approve, 2FA, Manual Review, Hold for Review). |
+| **How does SHAP work in this system?** | TreeSHAP attributes the model output to features relative to a baseline. The output space depends on the model/explainer configuration; it is not universally log-odds. |
 
 ---
 
@@ -345,7 +367,9 @@ docker-compose up --build
 
 ### Limitations
 - The system predicts *probabilistic risk*, not absolute truth. All outputs are labeled as "Potential Fraud" or "High Risk - Review Recommended".
-- The PCA features ($V_1 - V_{28}$) anonymize original banking fields (like merchant category or device fingerprint).
+- The Random Forest probabilities have not been calibrated with a dedicated method such as isotonic regression or Platt scaling; the 0–100 score is a direct rescaling of the model output.
+- The PCA features ($V_1 - V_{28}$) are anonymized numerical components; the original source fields are not provided in this dataset.
+- SQLite, permissive CORS, and the unauthenticated history-reset endpoint are appropriate for a local demonstration, not a hardened multi-user production deployment.
 
 ### Future Roadmap
 - **Streaming Pipeline**: Apache Kafka / Redpanda event streaming simulation.

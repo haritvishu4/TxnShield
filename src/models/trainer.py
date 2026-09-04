@@ -1,10 +1,12 @@
-from typing import Dict, Any, Tuple
+from typing import TYPE_CHECKING, Any, Dict
 import joblib
 from pathlib import Path
 import numpy as np
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
-from xgboost import XGBClassifier
+
+if TYPE_CHECKING:
+    from xgboost import XGBClassifier
 
 from src.utils.logger import get_logger
 from src.utils.config_loader import load_config
@@ -49,8 +51,10 @@ class ModelTrainer:
         logger.info("Random Forest training completed.")
         return model
 
-    def train_xgboost(self, X_train: np.ndarray, y_train: np.ndarray) -> XGBClassifier:
+    def train_xgboost(self, X_train: np.ndarray, y_train: np.ndarray) -> "XGBClassifier":
         """Trains XGBoost Classifier with scale_pos_weight for severe imbalance."""
+        from xgboost import XGBClassifier
+
         logger.info("Training XGBoost Classifier...")
         # Calculate dynamic scale_pos_weight if needed: N_neg / N_pos
         n_neg = (y_train == 0).sum()
