@@ -34,6 +34,21 @@ The project demonstrates a complete ML engineering workflow, including:
 - Docker deployment
 
 ---
+## 🖥️ Dashboard Preview
+
+### Overview
+![TxnShield Overview](docs/screenshots/overview.png)
+
+### Transaction Analysis
+![TxnShield Transaction Analysis](docs/screenshots/transaction-analysis.png)
+
+### Model Performance
+![TxnShield Model Performance](docs/screenshots/model-performance.png)
+
+### Monitoring & Audits
+![TxnShield Monitoring and Audits](docs/screenshots/monitoring-audits.png)
+
+---
 
 ## ✨ Key Features
 
