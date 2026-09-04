@@ -1,5 +1,11 @@
 # 🛡️ TxnShield
 
+## 🌐 Live Demo
+
+**Dashboard:** https://txnshield-edhpwbehknerxojbvynugt.streamlit.app
+
+**API Health:** https://txnshield-9gsw.onrender.com/health
+
 ### Transaction Fraud Intelligence
 
 [![Python 3.12](https://img.shields.io/badge/Python-3.12-blue.svg)](https://www.python.org/)
